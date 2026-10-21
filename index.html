@@ -1,0 +1,1125 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bulterier: Spacer po Lesie 3D - Szymek kl. 1b</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            position: fixed;
+            background-color: #05180b;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+        }
+        #canvas-container {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        .glass-panel {
+            background: rgba(6, 30, 16, 0.88);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+        .btn-action {
+            box-shadow: 0 4px 16px rgba(34, 197, 94, 0.45);
+            transition: all 0.15s ease-in-out;
+        }
+        .btn-action:active {
+            transform: scale(0.96);
+        }
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.22);
+            backdrop-filter: blur(6px);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+        }
+        .touch-btn:active {
+            background: rgba(34, 197, 94, 0.6);
+        }
+    </style>
+</head>
+<body class="relative flex flex-col justify-between">
+
+    <!-- Kontener Renderera Three.js -->
+    <div id="canvas-container"></div>
+
+    <!-- HUD (Statystyki w lesie) -->
+    <div class="relative z-10 w-full p-2 sm:p-4 pointer-events-none">
+        <div class="max-w-4xl mx-auto glass-panel rounded-2xl p-2.5 sm:p-4 flex items-center justify-between text-white shadow-2xl pointer-events-auto">
+            <!-- Piesek i Tytuł -->
+            <div class="flex items-center space-x-2">
+                <span class="text-2xl sm:text-3xl animate-pulse">🐶</span>
+                <div class="hidden xs:block">
+                    <h1 class="font-black text-sm sm:text-lg text-emerald-400 leading-tight">Spacer Bulteriera</h1>
+                    <p class="text-[10px] sm:text-xs text-emerald-200/80">Szymek, klasa 1b</p>
+                </div>
+            </div>
+
+            <!-- Liczniki -->
+            <div class="flex items-center space-x-2 sm:space-x-4 text-xs sm:text-base font-bold">
+                <div class="flex items-center space-x-1 bg-emerald-950/70 px-2.5 py-1 rounded-lg border border-emerald-700/50">
+                    <span>❤️</span>
+                    <span id="livesDisplay" class="text-red-400">3</span>
+                </div>
+                <div class="flex items-center space-x-1 bg-emerald-950/70 px-2.5 py-1 rounded-lg border border-emerald-700/50">
+                    <span>🏃</span>
+                    <span id="distanceDisplay" class="text-emerald-300">0m</span>
+                </div>
+                <div class="flex items-center space-x-1 bg-emerald-950/70 px-2.5 py-1 rounded-lg border border-emerald-700/50">
+                    <span>🥩</span>
+                    <span id="scoreDisplay" class="text-amber-300">0</span>
+                </div>
+                <div class="hidden sm:flex items-center space-x-1 bg-emerald-950/70 px-2.5 py-1 rounded-lg border border-emerald-700/50">
+                    <span>🥇</span>
+                    <span id="highScoreDisplay" class="text-amber-400">0</span>
+                </div>
+            </div>
+
+            <!-- Opcje dźwięku i pauzy -->
+            <div class="flex items-center space-x-1.5 sm:space-x-2">
+                <button id="soundBtn" class="bg-emerald-900/80 hover:bg-emerald-800 text-white p-1.5 sm:px-3 sm:py-1.5 rounded-lg text-xs sm:text-sm transition">🔊</button>
+                <button id="pauseBtn" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold px-2.5 py-1.5 rounded-lg text-xs sm:text-sm transition">Pauza</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sterowanie Dotykowe Ekranowe dla Smartfonów -->
+    <div id="mobileControls" class="relative z-10 w-full p-3 sm:p-5 flex justify-between items-end pointer-events-none mb-2">
+        <div class="flex space-x-2">
+            <button id="leftTouchBtn" class="touch-btn text-white text-2xl sm:text-3xl font-black w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center pointer-events-auto shadow-lg">⬅️</button>
+            <button id="rightTouchBtn" class="touch-btn text-white text-2xl sm:text-3xl font-black w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center pointer-events-auto shadow-lg">➡️</button>
+        </div>
+        <button id="jumpTouchBtn" class="touch-btn text-white text-base sm:text-lg font-black px-6 py-4 rounded-full flex items-center justify-center pointer-events-auto shadow-lg bg-emerald-600/40">🦘 SKOK</button>
+    </div>
+
+    <!-- Nakładka Menu Start / GameOver / Pauza -->
+    <div id="overlay" class="fixed inset-0 z-20 glass-panel flex flex-col items-center justify-center p-4 text-center text-white transition-opacity duration-300 overflow-y-auto">
+        <div class="max-w-md w-full bg-slate-950/90 border border-emerald-700/50 rounded-3xl p-5 sm:p-7 shadow-2xl flex flex-col items-center">
+            
+            <!-- Grafika 2D Bulteriera (Ilustracja Wektorowa SVG rasy Bulterier) -->
+            <div class="w-32 h-32 sm:w-40 sm:h-40 mb-3 drop-shadow-[0_10px_20px_rgba(16,185,129,0.3)]">
+                <svg viewBox="0 0 200 200" class="w-full h-full">
+                    <!-- Tło koło -->
+                    <circle cx="100" cy="100" r="95" fill="#064e3b" stroke="#10b981" stroke-width="4"/>
+                    <!-- Ucho lewe -->
+                    <polygon points="45,60 25,5 70,40" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+                    <polygon points="45,55 32,15 65,40" fill="#fda4af"/>
+                    <!-- Ucho prawe -->
+                    <polygon points="155,60 175,5 130,40" fill="#f8fafc" stroke="#e2e8f0" stroke-width="2"/>
+                    <polygon points="155,55 168,15 135,40" fill="#fda4af"/>
+                    <!-- Głowa jajo (Down-face profile) -->
+                    <path d="M 60,75 C 60,30 140,30 140,75 C 140,125 125,165 100,165 C 75,165 60,125 60,75 Z" fill="#f8fafc" stroke="#cbd5e1" stroke-width="3"/>
+                    <!-- Łata przy oku lewym -->
+                    <path d="M 68,75 C 68,60 88,60 90,78 C 90,92 72,95 68,75 Z" fill="#1e293b"/>
+                    <!-- Oko lewe -->
+                    <ellipse cx="78" cy="76" rx="5" ry="3" fill="#ffffff" transform="rotate(-15 78 76)"/>
+                    <ellipse cx="78" cy="76" rx="3" ry="2" fill="#000000" transform="rotate(-15 78 76)"/>
+                    <!-- Oko prawe -->
+                    <ellipse cx="122" cy="76" rx="5" ry="3" fill="#1e293b" transform="rotate(15 122 76)"/>
+                    <ellipse cx="122" cy="76" rx="3" ry="2" fill="#000000" transform="rotate(15 122 76)"/>
+                    <!-- Czarny Noch (Kufa Bulteriera) -->
+                    <path d="M 88,145 Q 100,138 112,145 Q 100,162 88,145 Z" fill="#0f172a"/>
+                    <!-- Uśmiech pyszczka -->
+                    <path d="M 86,155 Q 100,162 114,155" fill="none" stroke="#64748b" stroke-width="3" stroke-linecap="round"/>
+                    <!-- Różowy język -->
+                    <path d="M 94,159 Q 100,172 106,159 Z" fill="#fb7185"/>
+                </svg>
+            </div>
+
+            <!-- Tytuł i Podpis Autor -->
+            <h2 id="overlayTitle" class="text-2xl sm:text-3xl font-black text-emerald-400 mb-1 leading-tight">Spacer Bulteriera 3D</h2>
+            
+            <div class="inline-block bg-amber-500/20 border border-amber-400/50 rounded-full px-4 py-1 mb-3">
+                <p class="text-amber-300 font-bold text-xs sm:text-sm">🐾 Gra utworzona przez Szymka, klasa 1b 🐾</p>
+            </div>
+
+            <p id="overlayDesc" class="text-slate-200 text-xs sm:text-sm mb-4 leading-relaxed">
+                Prowadź pieska rasy Bulterier przez leśną ścieżkę! Pies biegnie przodem w głąb lasu 🌲 Zbieraj kości, mięsko i wodę. Omijaj pniaki oraz złośliwe pszczoły!
+            </p>
+            
+            <button id="startBtn" class="btn-action w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-lg sm:text-xl py-3 rounded-2xl uppercase tracking-wider cursor-pointer mb-3">
+                Rozpocznij Spacer!
+            </button>
+
+            <!-- Instrukcje sterowania -->
+            <div class="w-full bg-emerald-950/60 rounded-xl p-3 text-[11px] sm:text-xs text-emerald-200 space-y-1 text-left border border-emerald-800/40">
+                <p>🎮 <b>Sterowanie:</b> Strzałki lewo/prawo (A/D) = zmiana toru, Spacja / W / Górna strzałka = Skok</p>
+                <p>📱 <b>Telefon:</b> Używaj przycisków na dole ekranu lub przesuwaj palcem!</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === Web Audio API Engine ===
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.muted = false;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
+                }
+                if (this.ctx.state === 'suspended') {
+                    this.ctx.resume();
+                }
+            }
+
+            playCrunch() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(700, this.ctx.currentTime + 0.08);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playSausage() {
+                if (this.muted || !this.ctx) return;
+                const freqs = [440, 554.37, 659.25, 880];
+                freqs.forEach((freq, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + i * 0.04);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + i * 0.04);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.04 + 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.04);
+                    osc.stop(this.ctx.currentTime + i * 0.04 + 0.08);
+                });
+            }
+
+            playJump() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(450, this.ctx.currentTime + 0.15);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playBark() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(350, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(140, this.ctx.currentTime + 0.12);
+                gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.12);
+            }
+
+            playSting() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.25);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+
+            playWater() {
+                if (this.muted || !this.ctx) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(900, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+            }
+
+            // Klasyczna Smutna Melodyjka Przegranej (Opadające tony z kreskówek)
+            playSadMelody() {
+                if (this.muted || !this.ctx) return;
+                const notes = [
+                    { f: 493.88, d: 0.25, delay: 0 },    // B4
+                    { f: 466.16, d: 0.25, delay: 0.25 }, // A#4
+                    { f: 440.00, d: 0.25, delay: 0.50 }, // A4
+                    { f: 349.23, d: 0.85, delay: 0.75 }  // F4 (Smutne zakończenie)
+                ];
+
+                notes.forEach(note => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(note.f, this.ctx.currentTime + note.delay);
+                    
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime + note.delay);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + note.delay + note.d);
+                    
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + note.delay);
+                    osc.stop(this.ctx.currentTime + note.delay + note.d);
+                });
+            }
+        }
+
+        const sound = new SoundEngine();
+
+        // === Stan Gry ===
+        let gameRunning = false;
+        let isPaused = false;
+        let isGameOverAnim = false; // Czy trwa zbliżenie kamery i gwiazdki
+        let gameOverTime = 0;
+        let score = 0;
+        let distance = 0;
+        let highScore = parseInt(localStorage.getItem('bull_terrier_forest_highscore') || '0', 10);
+        let lives = 3;
+        let level = 1;
+        let baseSpeed = 0.28;
+        let currentSpeed = baseSpeed;
+        let spawnTimer = 0;
+        let items = [];
+        let particles = [];
+        let forestObjects = [];
+
+        document.getElementById('highScoreDisplay').innerText = highScore;
+
+        // === Inicjalizacja Three.js (Świat 3D) ===
+        const container = document.getElementById('canvas-container');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f381e);
+        scene.fog = new THREE.FogExp2(0x0f381e, 0.018);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const defaultCamPos = new THREE.Vector3(0, 4.2, 9.5);
+        const defaultCamLookAt = new THREE.Vector3(0, 1.4, -4);
+        camera.position.copy(defaultCamPos);
+        camera.lookAt(defaultCamLookAt);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        container.appendChild(renderer.domElement);
+
+        // Oświetlenie Ciepłego Zachodu Słońca w Lesie
+        const ambientLight = new THREE.AmbientLight(0xffedd5, 0.75);
+        scene.add(ambientLight);
+
+        const sunLight = new THREE.DirectionalLight(0xfcb35d, 1.25);
+        sunLight.position.set(20, 30, -20);
+        sunLight.castShadow = true;
+        sunLight.shadow.mapSize.width = 1024;
+        sunLight.shadow.mapSize.height = 1024;
+        sunLight.shadow.camera.near = 0.5;
+        sunLight.shadow.camera.far = 80;
+        sunLight.shadow.camera.left = -20;
+        sunLight.shadow.camera.right = 20;
+        sunLight.shadow.camera.top = 20;
+        sunLight.shadow.camera.bottom = -20;
+        scene.add(sunLight);
+
+        // Ścieżka leśna (Podłoże)
+        const pathGeo = new THREE.PlaneGeometry(10, 200);
+        const pathMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
+        const pathMesh = new THREE.Mesh(pathGeo, pathMat);
+        pathMesh.rotation.x = -Math.PI / 2;
+        pathMesh.position.set(0, 0, -80);
+        pathMesh.receiveShadow = true;
+        scene.add(pathMesh);
+
+        // Trawa po bokach
+        const grassGeo = new THREE.PlaneGeometry(80, 200);
+        const grassMat = new THREE.MeshStandardMaterial({ color: 0x14532d, roughness: 0.85 });
+        const grassMesh = new THREE.Mesh(grassGeo, grassMat);
+        grassMesh.rotation.x = -Math.PI / 2;
+        grassMesh.position.set(0, -0.01, -80);
+        grassMesh.receiveShadow = true;
+        scene.add(grassMesh);
+
+        // Generator Drzew i Roślinności Leśnej
+        function createTree(x, z, type = 'pine') {
+            const group = new THREE.Group();
+            if (type === 'pine') {
+                const trunkGeo = new THREE.CylinderGeometry(0.3, 0.5, 3, 8);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x451a03 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 1.5;
+                trunk.castShadow = true;
+                group.add(trunk);
+
+                const folMat = new THREE.MeshStandardMaterial({ color: 0x064e3b, roughness: 0.7 });
+                for (let i = 0; i < 3; i++) {
+                    const folGeo = new THREE.ConeGeometry(2 - i * 0.4, 3, 8);
+                    const fol = new THREE.Mesh(folGeo, folMat);
+                    fol.position.y = 3.5 + i * 1.8;
+                    fol.castShadow = true;
+                    group.add(fol);
+                }
+            } else {
+                // Dąb
+                const trunkGeo = new THREE.CylinderGeometry(0.4, 0.6, 2.5, 8);
+                const trunkMat = new THREE.MeshStandardMaterial({ color: 0x381e07 });
+                const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+                trunk.position.y = 1.25;
+                trunk.castShadow = true;
+                group.add(trunk);
+
+                const crownGeo = new THREE.SphereGeometry(2, 12, 12);
+                const crownMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+                const crown = new THREE.Mesh(crownGeo, crownMat);
+                crown.position.y = 3.8;
+                crown.castShadow = true;
+                group.add(crown);
+            }
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            return group;
+        }
+
+        // Grzyby leśne
+        function createMushroom(x, z) {
+            const group = new THREE.Group();
+            const stemGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.4, 8);
+            const stemMat = new THREE.MeshStandardMaterial({ color: 0xfef08a });
+            const stem = new THREE.Mesh(stemGeo, stemMat);
+            stem.position.y = 0.2;
+            group.add(stem);
+
+            const capGeo = new THREE.ConeGeometry(0.3, 0.3, 8);
+            const capMat = new THREE.MeshStandardMaterial({ color: 0xd97706 });
+            const cap = new THREE.Mesh(capGeo, capMat);
+            cap.position.y = 0.45;
+            group.add(cap);
+
+            group.position.set(x, 0, z);
+            scene.add(group);
+            return group;
+        }
+
+        // Populowanie leśnego otoczenia
+        for (let z = 10; z > -150; z -= 8) {
+            const leftX = -7 - Math.random() * 12;
+            const rightX = 7 + Math.random() * 12;
+            forestObjects.push(createTree(leftX, z, Math.random() > 0.4 ? 'pine' : 'oak'));
+            forestObjects.push(createTree(rightX, z, Math.random() > 0.4 ? 'pine' : 'oak'));
+
+            if (Math.random() > 0.5) {
+                forestObjects.push(createMushroom(-5.5 - Math.random() * 2, z + 3));
+                forestObjects.push(createMushroom(5.5 + Math.random() * 2, z - 2));
+            }
+        }
+
+        // === Tworzenie Gwiazdek Looney Tunes над głową psa ===
+        function createStarMesh() {
+            const shape = new THREE.Shape();
+            const points = 5;
+            const outerRadius = 0.18;
+            const innerRadius = 0.08;
+
+            for (let i = 0; i < points * 2; i++) {
+                const r = (i % 2 === 0) ? outerRadius : innerRadius;
+                const angle = (i / (points * 2)) * Math.PI * 2;
+                const x = Math.cos(angle) * r;
+                const y = Math.sin(angle) * r;
+                if (i === 0) shape.moveTo(x, y);
+                else shape.lineTo(x, y);
+            }
+            shape.closePath();
+
+            const extrudeSettings = { depth: 0.04, bevelEnabled: true, bevelSegments: 2, steps: 1, bevelSize: 0.01, bevelThickness: 0.01 };
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            const material = new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.2, metalness: 0.6, emissive: 0x854d0e });
+            return new THREE.Mesh(geometry, material);
+        }
+
+        // Pierścień kręcących się gwiazdek
+        const dizzyStarsGroup = new THREE.Group();
+        const starMeshes = [];
+        const numStars = 5;
+
+        for (let i = 0; i < numStars; i++) {
+            const star = createStarMesh();
+            dizzyStarsGroup.add(star);
+            starMeshes.push(star);
+        }
+        dizzyStarsGroup.visible = false;
+        scene.add(dizzyStarsGroup);
+
+        // === Budowa Modelu Bulteriera 3D (Biega przodem w głąb lasu -Z) ===
+        function createBullTerrier() {
+            const dogGroup = new THREE.Group();
+
+            const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35 });
+            const pinkMat = new THREE.MeshStandardMaterial({ color: 0xfda4af, roughness: 0.5 });
+            const blackMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 });
+            const patchMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3 });
+            const collarMat = new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.3 });
+
+            // Tułów
+            const bodyGeo = new THREE.SphereGeometry(0.95, 16, 16);
+            bodyGeo.scale(0.75, 0.8, 1.35);
+            const body = new THREE.Mesh(bodyGeo, whiteMat);
+            body.position.y = 1.05;
+            body.castShadow = true;
+            dogGroup.add(body);
+
+            // Głowa w kształcie jajka (Down-face profile) z przodu tułowia (-Z)
+            const headGroup = new THREE.Group();
+            headGroup.position.set(0, 1.45, -0.75);
+
+            const headGeo = new THREE.SphereGeometry(0.58, 16, 16);
+            headGeo.scale(0.68, 0.72, 1.25);
+            const head = new THREE.Mesh(headGeo, whiteMat);
+            head.rotation.x = -0.38;
+            head.position.set(0, 0.2, -0.3);
+            head.castShadow = true;
+            headGroup.add(head);
+
+            // Czarna łata na oku
+            const patchGeo = new THREE.SphereGeometry(0.18, 10, 10);
+            const patch = new THREE.Mesh(patchGeo, patchMat);
+            patch.position.set(-0.2, 0.29, -0.5);
+            patch.scale.set(1, 1, 0.4);
+            headGroup.add(patch);
+
+            // Czarny nosek
+            const noseGeo = new THREE.SphereGeometry(0.11, 8, 8);
+            const nose = new THREE.Mesh(noseGeo, blackMat);
+            nose.position.set(0, -0.05, -1.0);
+            headGroup.add(nose);
+
+            // Ciemne migdałowate oczy
+            const eyeGeo = new THREE.SphereGeometry(0.055, 8, 8);
+            const leftEye = new THREE.Mesh(eyeGeo, blackMat);
+            leftEye.position.set(-0.22, 0.28, -0.52);
+            const rightEye = new THREE.Mesh(eyeGeo, blackMat);
+            rightEye.position.set(0.22, 0.28, -0.52);
+            headGroup.add(leftEye, rightEye);
+
+            // Uszy (Lewe i Prawe)
+            const ears = [];
+            function createEar(isLeft) {
+                const earGroup = new THREE.Group();
+                const outerGeo = new THREE.ConeGeometry(0.16, 0.65, 8);
+                outerGeo.scale(1, 1, 0.4);
+                const outer = new THREE.Mesh(outerGeo, whiteMat);
+                outer.castShadow = true;
+                earGroup.add(outer);
+
+                const innerGeo = new THREE.ConeGeometry(0.12, 0.5, 8);
+                innerGeo.scale(1, 1, 0.3);
+                const inner = new THREE.Mesh(innerGeo, pinkMat);
+                inner.position.z = -0.02;
+                earGroup.add(inner);
+
+                earGroup.position.set(isLeft ? -0.3 : 0.3, 0.62, -0.12);
+                earGroup.rotation.x = 0.15;
+                earGroup.rotation.z = isLeft ? 0.22 : -0.22;
+                return earGroup;
+            }
+            const lEar = createEar(true);
+            const rEar = createEar(false);
+            headGroup.add(lEar, rEar);
+            ears.push(lEar, rEar);
+
+            // Pomarańczowa Obroża
+            const collarGeo = new THREE.TorusGeometry(0.44, 0.07, 8, 16);
+            const collar = new THREE.Mesh(collarGeo, collarMat);
+            collar.rotation.x = Math.PI / 2 - 0.3;
+            collar.position.set(0, -0.08, -0.08);
+            headGroup.add(collar);
+
+            dogGroup.add(headGroup);
+
+            // 4 Nogi
+            const legGeo = new THREE.CylinderGeometry(0.11, 0.09, 0.75, 8);
+            const legs = [];
+            const legPositions = [
+                { x: -0.4, z: -0.6 },
+                { x: 0.4, z: -0.6 },
+                { x: -0.4, z: 0.55 },
+                { x: 0.4, z: 0.55 }
+            ];
+
+            legPositions.forEach(pos => {
+                const leg = new THREE.Mesh(legGeo, whiteMat);
+                leg.position.set(pos.x, 0.38, pos.z);
+                leg.castShadow = true;
+                dogGroup.add(leg);
+                legs.push(leg);
+            });
+
+            // Ogonek
+            const tailGeo = new THREE.CylinderGeometry(0.04, 0.08, 0.55, 8);
+            const tail = new THREE.Mesh(tailGeo, whiteMat);
+            tail.position.set(0, 1.05, 1.15);
+            tail.rotation.x = 1.1;
+            tail.castShadow = true;
+            dogGroup.add(tail);
+
+            dogGroup.scale.set(1.2, 1.2, 1.2);
+            dogGroup.position.set(0, 0, 0);
+
+            return {
+                mesh: dogGroup,
+                legs: legs,
+                tail: tail,
+                head: headGroup,
+                ears: ears,
+                currentLane: 1,
+                targetX: 0,
+                xPos: 0,
+                yPos: 0,
+                jumpVy: 0,
+                isJumping: false,
+                boostTimer: 0,
+                slowTimer: 0,
+                animTime: 0
+            };
+        }
+
+        const dog = createBullTerrier();
+        scene.add(dog.mesh);
+
+        // === Tworzenie Smakołyków i Przeszkód 3D ===
+        function createObject3DMesh(type) {
+            const group = new THREE.Group();
+
+            if (type === 'bone') {
+                const mat = new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.3 });
+                const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.7, 8), mat);
+                shaft.rotation.z = Math.PI / 2;
+                shaft.castShadow = true;
+                group.add(shaft);
+
+                const knobGeo = new THREE.SphereGeometry(0.15, 8, 8);
+                [[-0.35, 0.1], [-0.35, -0.1], [0.35, 0.1], [0.35, -0.1]].forEach(p => {
+                    const knob = new THREE.Mesh(knobGeo, mat);
+                    knob.position.set(p[0], p[1], 0);
+                    knob.castShadow = true;
+                    group.add(knob);
+                });
+                group.position.y = 0.8;
+            } else if (type === 'sausage') {
+                const mat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.4 });
+                const sausage = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.8, 12), mat);
+                sausage.rotation.z = Math.PI / 3;
+                sausage.castShadow = true;
+                group.add(sausage);
+                group.position.y = 0.8;
+            } else if (type === 'ball') {
+                const ball = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.32, 16, 16),
+                    new THREE.MeshStandardMaterial({ color: 0x84cc16, roughness: 0.5 })
+                );
+                ball.castShadow = true;
+                group.add(ball);
+                group.position.y = 0.6;
+            } else if (type === 'water') {
+                const bowl = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.45, 0.35, 0.25, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.1 })
+                );
+                bowl.castShadow = true;
+                group.add(bowl);
+                group.position.y = 0.2;
+            } else if (type === 'bee') {
+                for (let i = 0; i < 3; i++) {
+                    const bee = new THREE.Mesh(
+                        new THREE.SphereGeometry(0.2, 8, 8),
+                        new THREE.MeshStandardMaterial({ color: 0xfacc15, roughness: 0.3 })
+                    );
+                    bee.position.set((i - 1) * 0.25, Math.sin(i) * 0.1, (i - 1) * 0.15);
+                    bee.castShadow = true;
+                    group.add(bee);
+                }
+                group.position.y = 1.2;
+            } else if (type === 'log') {
+                const log = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.35, 0.38, 2.2, 10),
+                    new THREE.MeshStandardMaterial({ color: 0x512909, roughness: 0.9 })
+                );
+                log.rotation.z = Math.PI / 2;
+                log.castShadow = true;
+                group.add(log);
+                group.position.y = 0.35;
+            } else if (type === 'mud') {
+                const mud = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.9, 1.0, 0.05, 12),
+                    new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.95 })
+                );
+                group.add(mud);
+                group.position.y = 0.03;
+            }
+
+            return group;
+        }
+
+        class LeśnyObiekt {
+            constructor() {
+                const rand = Math.random();
+                if (rand < 0.30) this.type = 'bone';
+                else if (rand < 0.45) this.type = 'sausage';
+                else if (rand < 0.60) this.type = 'ball';
+                else if (rand < 0.68) this.type = 'water';
+                else if (rand < 0.80) this.type = 'bee';
+                else if (rand < 0.91) this.type = 'log';
+                else this.type = 'mud';
+
+                this.mesh = createObject3DMesh(this.type);
+                
+                const lanes = [-2.2, 0, 2.2];
+                this.lane = Math.floor(Math.random() * 3);
+                this.x = lanes[this.lane];
+                this.z = -70;
+
+                this.mesh.position.x = this.x;
+                this.mesh.position.z = this.z;
+                scene.add(this.mesh);
+            }
+
+            update(speed) {
+                this.z += speed;
+                this.mesh.position.z = this.z;
+
+                if (['bone', 'sausage', 'ball', 'water'].includes(this.type)) {
+                    this.mesh.rotation.y += 0.03;
+                } else if (this.type === 'bee') {
+                    this.mesh.position.y = 1.2 + Math.sin(Date.now() * 0.008) * 0.25;
+                }
+            }
+
+            destroy() {
+                scene.remove(this.mesh);
+            }
+        }
+
+        // Cząsteczki 3D
+        function spawnParticles3D(x, y, z, colorHex, count = 10) {
+            for (let i = 0; i < count; i++) {
+                const pMesh = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.08, 6, 6),
+                    new THREE.MeshBasicMaterial({ color: colorHex })
+                );
+                pMesh.position.set(x, y, z);
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.18,
+                    Math.random() * 0.18,
+                    (Math.random() - 0.5) * 0.18
+                );
+                scene.add(pMesh);
+                particles.push({ mesh: pMesh, vel: velocity, life: 1.0 });
+            }
+        }
+
+        // === Sterowanie Gracza ===
+        const lanes = [-2.2, 0, 2.2];
+
+        function moveLeft() {
+            if (!gameRunning || isPaused || isGameOverAnim) return;
+            if (dog.currentLane > 0) {
+                dog.currentLane--;
+                dog.targetX = lanes[dog.currentLane];
+            }
+        }
+
+        function moveRight() {
+            if (!gameRunning || isPaused || isGameOverAnim) return;
+            if (dog.currentLane < 2) {
+                dog.currentLane++;
+                dog.targetX = lanes[dog.currentLane];
+            }
+        }
+
+        function triggerJump() {
+            if (!gameRunning || isPaused || isGameOverAnim) return;
+            if (!dog.isJumping) {
+                dog.isJumping = true;
+                dog.jumpVy = 0.22;
+                sound.playJump();
+            }
+        }
+
+        // Obsługa Klawiatury
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') moveLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') moveRight();
+            if (e.key === ' ' || e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') triggerJump();
+        });
+
+        // Przyciski ekranowe dla urządzeń dotykowych
+        document.getElementById('leftTouchBtn').addEventListener('touchstart', (e) => { e.preventDefault(); moveLeft(); });
+        document.getElementById('rightTouchBtn').addEventListener('touchstart', (e) => { e.preventDefault(); moveRight(); });
+        document.getElementById('jumpTouchBtn').addEventListener('touchstart', (e) => { e.preventDefault(); triggerJump(); });
+
+        // Gest Przeciągania (Swipe)
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        window.addEventListener('touchstart', (e) => {
+            touchStartX = e.touches[0].clientX;
+            touchStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        window.addEventListener('touchend', (e) => {
+            const diffX = e.changedTouches[0].clientX - touchStartX;
+            const diffY = e.changedTouches[0].clientY - touchStartY;
+
+            if (Math.abs(diffX) > Math.abs(diffY)) {
+                if (diffX < -30) moveLeft();
+                else if (diffX > 30) moveRight();
+            } else {
+                if (diffY < -30) triggerJump();
+            }
+        }, { passive: true });
+
+        // Responsywność ekranu i kamery 3D
+        function onWindowResize() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            camera.aspect = width / height;
+            if (!isGameOverAnim) {
+                if (width < height) {
+                    defaultCamPos.set(0, 5.2, 11);
+                } else {
+                    defaultCamPos.set(0, 4.2, 9.5);
+                }
+                camera.position.copy(defaultCamPos);
+                camera.lookAt(defaultCamLookAt);
+            }
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+        window.addEventListener('orientationchange', () => setTimeout(onWindowResize, 150));
+        onWindowResize();
+
+        // === HUD & Pętla Gry ===
+        function updateHUD() {
+            document.getElementById('scoreDisplay').innerText = score;
+            document.getElementById('distanceDisplay').innerText = `${Math.floor(distance)}m`;
+            document.getElementById('livesDisplay').innerText = lives > 0 ? '❤️'.repeat(lives) : '💀';
+        }
+
+        function resetGame() {
+            score = 0;
+            distance = 0;
+            lives = 3;
+            level = 1;
+            dog.currentLane = 1;
+            dog.targetX = 0;
+            dog.xPos = 0;
+            dog.yPos = 0;
+            dog.isJumping = false;
+            dog.boostTimer = 0;
+            dog.slowTimer = 0;
+
+            // Reset głowy i uszu psa
+            dog.mesh.rotation.y = 0;
+            dog.head.rotation.z = 0;
+            dog.ears[0].rotation.z = 0.22;
+            dog.ears[1].rotation.z = -0.22;
+
+            dizzyStarsGroup.visible = false;
+            isGameOverAnim = false;
+            gameOverTime = 0;
+
+            camera.position.copy(defaultCamPos);
+            camera.lookAt(defaultCamLookAt);
+
+            items.forEach(item => item.destroy());
+            items = [];
+
+            particles.forEach(p => scene.remove(p.mesh));
+            particles = [];
+
+            updateHUD();
+        }
+
+        // === INITIATE CARTOON GAME OVER SEQUENCE ===
+        function triggerGameOverSequence() {
+            gameRunning = false;
+            isGameOverAnim = true;
+            gameOverTime = 0;
+
+            // Smutny opuszczony pyszczek i klapnięte uszy bulteriera
+            dog.mesh.rotation.y = Math.PI; // Pies obraca się twarzą prosto do kamery!
+            dog.ears[0].rotation.z = -0.4;
+            dog.ears[1].rotation.z = 0.4;
+            dog.head.rotation.z = 0.15;
+
+            // Pokazanie kręcących się gwiazdek nad głową
+            dizzyStarsGroup.visible = true;
+
+            // Smutna melodyjka z kreskówki
+            sound.playSadMelody();
+
+            const totalMeters = Math.floor(distance);
+            if (totalMeters > highScore) {
+                highScore = totalMeters;
+                localStorage.setItem('bull_terrier_forest_highscore', highScore.toString());
+                document.getElementById('highScoreDisplay').innerText = highScore;
+            }
+
+            // Pokaż menu restartu po 2 sekundach kręcenia się gwiazdek
+            setTimeout(() => {
+                const overlay = document.getElementById('overlay');
+                document.getElementById('overlayTitle').innerText = 'Oj! Piesek Uderzył w Pniak!';
+                document.getElementById('overlayDesc').innerHTML = `
+                    <span class="text-yellow-400 font-bold text-base">💫 Kręci mu się w głowie jak w bajkach! 💫</span><br><br>
+                    Przebyty dystans: <b class="text-emerald-400 text-xl">${totalMeters} m</b><br>
+                    Zdobyte smakołyki: <b class="text-amber-400 text-xl">${score} pkt</b><br>
+                    Najlepszy rekord: <b class="text-yellow-300 text-xl">${highScore} m</b>
+                `;
+                document.getElementById('startBtn').innerText = 'Zagraj Ponownie 🔄';
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+            }, 2000);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // ANIMACJA PRZEGRANEJ - LOONEY TUNES ZOOMI STAR ROTATION
+            if (isGameOverAnim) {
+                gameOverTime += 0.04;
+
+                // Płynne zbliżenie kamery na twarz pieska
+                const headWorldPos = new THREE.Vector3();
+                dog.head.getWorldPosition(headWorldPos);
+
+                const targetCamPos = new THREE.Vector3(
+                    dog.mesh.position.x,
+                    headWorldPos.y + 0.1,
+                    dog.mesh.position.z + 2.6
+                );
+
+                camera.position.lerp(targetCamPos, 0.08);
+                camera.lookAt(headWorldPos.x, headWorldPos.y, headWorldPos.z);
+
+                // Pozycja pierścienia gwiazdek tuż nad głową
+                dizzyStarsGroup.position.set(dog.mesh.position.x, headWorldPos.y + 0.85, dog.mesh.position.z);
+
+                // Obrotowa spirala gwiazdek
+                const radius = 0.65;
+                for (let i = 0; i < numStars; i++) {
+                    const angle = gameOverTime * 3.5 + (i / numStars) * Math.PI * 2;
+                    starMeshes[i].position.x = Math.cos(angle) * radius;
+                    starMeshes[i].position.z = Math.sin(angle) * radius;
+                    starMeshes[i].position.y = Math.sin(angle * 2) * 0.12;
+                    starMeshes[i].rotation.z += 0.1;
+                    starMeshes[i].rotation.y += 0.08;
+                }
+            }
+
+            if (gameRunning && !isPaused) {
+                let speedMult = 1.0;
+                if (dog.boostTimer > 0) {
+                    speedMult = 1.4;
+                    dog.boostTimer--;
+                }
+                if (dog.slowTimer > 0) {
+                    speedMult = 0.55;
+                    dog.slowTimer--;
+                }
+
+                currentSpeed = (baseSpeed + level * 0.02) * speedMult;
+                distance += currentSpeed * 2.5;
+
+                // Płynny ruch w bok
+                dog.xPos += (dog.targetX - dog.xPos) * 0.25;
+                dog.mesh.position.x = dog.xPos;
+
+                // Fizyka Skoku
+                if (dog.isJumping) {
+                    dog.yPos += dog.jumpVy;
+                    dog.jumpVy -= 0.015;
+                    if (dog.yPos <= 0) {
+                        dog.yPos = 0;
+                        dog.isJumping = false;
+                    }
+                }
+                dog.mesh.position.y = dog.yPos;
+
+                // Animacja Biegająca Psa
+                dog.tail.rotation.z = Math.sin(Date.now() * 0.02) * 0.45;
+                dog.animTime += 0.25 * speedMult;
+
+                if (!dog.isJumping) {
+                    dog.legs[0].rotation.x = Math.sin(dog.animTime) * 0.7;
+                    dog.legs[1].rotation.x = -Math.sin(dog.animTime) * 0.7;
+                    dog.legs[2].rotation.x = -Math.sin(dog.animTime) * 0.7;
+                    dog.legs[3].rotation.x = Math.sin(dog.animTime) * 0.7;
+                } else {
+                    dog.legs[0].rotation.x = -0.5;
+                    dog.legs[1].rotation.x = -0.5;
+                    dog.legs[2].rotation.x = 0.5;
+                    dog.legs[3].rotation.x = 0.5;
+                }
+
+                // Przesuwanie drzew
+                forestObjects.forEach(obj => {
+                    obj.position.z += currentSpeed * 1.5;
+                    if (obj.position.z > 15) {
+                        obj.position.z -= 160;
+                    }
+                });
+
+                // Spawnowanie Smakołyków i Przeszkód
+                spawnTimer++;
+                const spawnInterval = Math.max(22, 55 - level * 3);
+                if (spawnTimer > spawnInterval) {
+                    items.push(new LeśnyObiekt());
+                    spawnTimer = 0;
+                }
+
+                // Aktualizacja i Kolizje 3D
+                for (let i = items.length - 1; i >= 0; i--) {
+                    const item = items[i];
+                    item.update(currentSpeed * 1.5);
+
+                    const dx = Math.abs(item.x - dog.xPos);
+                    const dz = Math.abs(item.z - dog.mesh.position.z);
+                    const dy = Math.abs(item.mesh.position.y - (dog.yPos + 0.6));
+
+                    if (dx < 0.9 && dz < 0.9 && dy < 1.0) {
+                        if (item.type === 'bone') {
+                            score += 25;
+                            sound.playCrunch();
+                            spawnParticles3D(item.x, 0.8, item.z, 0xfef08a, 10);
+                        } else if (item.type === 'sausage') {
+                            score += 50;
+                            dog.boostTimer = 160;
+                            sound.playSausage();
+                            sound.playBark();
+                            spawnParticles3D(item.x, 0.8, item.z, 0xef4444, 14);
+                        } else if (item.type === 'ball') {
+                            score += 15;
+                            sound.playCrunch();
+                            spawnParticles3D(item.x, 0.6, item.z, 0x84cc16, 10);
+                        } else if (item.type === 'water') {
+                            if (lives < 5) lives++;
+                            sound.playWater();
+                            spawnParticles3D(item.x, 0.4, item.z, 0x38bdf8, 12);
+                        } else if (item.type === 'bee') {
+                            lives--;
+                            sound.playSting();
+                            spawnParticles3D(item.x, 1.2, item.z, 0xfacc15, 15);
+                            if (lives <= 0) triggerGameOverSequence();
+                        } else if (item.type === 'log') {
+                            if (dog.yPos < 0.4) {
+                                lives = 0;
+                                spawnParticles3D(item.x, 0.4, item.z, 0x512909, 18);
+                                triggerGameOverSequence();
+                                item.destroy();
+                                items.splice(i, 1);
+                                break;
+                            }
+                        } else if (item.type === 'mud') {
+                            dog.slowTimer = 130;
+                            sound.playSting();
+                            spawnParticles3D(item.x, 0.1, item.z, 0x451a03, 8);
+                        }
+
+                        level = Math.floor(score / 150) + 1;
+                        updateHUD();
+                        item.destroy();
+                        items.splice(i, 1);
+                        continue;
+                    }
+
+                    if (item.z > 12) {
+                        item.destroy();
+                        items.splice(i, 1);
+                    }
+                }
+
+                // Cząsteczki
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.mesh.position.add(p.vel);
+                    p.life -= 0.035;
+                    p.mesh.scale.multiplyScalar(0.94);
+                    if (p.life <= 0) {
+                        scene.remove(p.mesh);
+                        particles.splice(i, 1);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Przyciski Interfejsu UI
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        const soundBtn = document.getElementById('soundBtn');
+
+        startBtn.addEventListener('click', () => {
+            sound.init();
+            sound.playBark();
+            resetGame();
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            gameRunning = true;
+            isPaused = false;
+        });
+
+        pauseBtn.addEventListener('click', () => {
+            if (!gameRunning) return;
+            isPaused = !isPaused;
+            pauseBtn.innerText = isPaused ? "Wznów" : "Pauza";
+        });
+
+        soundBtn.addEventListener('click', () => {
+            sound.muted = !sound.muted;
+            soundBtn.innerText = sound.muted ? "🔇" : "🔊";
+        });
+
+        // Uruchomienie Three.js
+        animate();
+    </script>
+</body>
+</html>
